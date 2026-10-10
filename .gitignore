@@ -1,0 +1,16 @@
+# Never commit credentials: per-project harness config may contain an api_key.
+.harness/
+credentials.json
+.env
+.env.*
+*.key
+
+# Python / editor noise
+__pycache__/
+*.pyc
+*.log
+.venv/
+venv/
+.idea/
+.vscode/
+.DS_Store
