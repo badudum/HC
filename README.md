@@ -44,20 +44,20 @@ The key is never printed: `/config` shows it masked. A `401` error means the key
 
 ## Things to know about this model and server
 
-The server runs **Qwen3-30B-A3B-Thinking (abliterated)** on llama.cpp, on old hardware. The harness is tuned for
+The server runs **Qwen3.6-35B-A3B (abliterated)** on llama.cpp, on old hardware. The harness is tuned for
 it, but expect this:
 
-- **It's slow.** The model thinks before every answer at about 18 tokens/s. Left alone it thinks for 300–3,000+
+- **It's slow.** The model thinks before every answer at about 15–20 tokens/s. Left alone it thinks for 300–3,000+
   tokens per step and often repeats itself, so the harness limits it (see "Thinking budget" below). With the
   default limits a step takes roughly 15–90 seconds. The spinner shows the thinking token count; Ctrl-T shows the
   reasoning itself.
-- **Long prompts take a long time to read** (about 50–90 tokens/s). The harness never changes earlier messages
+- **Long prompts take a long time to read** (about 100 tokens/s). The harness never changes earlier messages
   and keeps the system prompt fixed, so the server only reads what's new each step. Things that force a full
   re-read, which can take several minutes on a long conversation:
   - `/mode`, `/model` and `/clear`
   - restarting a session with `hc -c`
   - another user's requests pushing yours out of the server's cache
-- **Limited context per request:** currently 24k tokens per slot, covering prompt, reasoning and answer together.
+- **Limited context per request:** currently 64k tokens per slot, covering prompt, reasoning and answer together.
   The harness reads the real size from the server (`/props`) at startup, so it adapts when the server's settings
   change. See below for what happens when it fills up.
 - **Only 2 requests run at once** across all users. More requests queue, and a `Task` sub-agent uses the second
@@ -66,8 +66,10 @@ it, but expect this:
   retries automatically after 3, 8, 20 and 45 seconds.
 - **It's uncensored ("abliterated") and can be confidently wrong.** The harness's only safeguard is its permission
   prompts. Read the diffs before approving them, and keep `default` mode for anything that matters.
-- Sampling settings come from the server (temperature 0.6 etc., Qwen's recommendations for thinking models). Set
-  `"temperature"` in the config only if you need to override them.
+- **Sampling:** the harness sends Qwen3.6's recommendation for precise coding, `temperature 0.6` and
+  `presence_penalty 0`, which overrides the server's general-chat defaults (`1.0` / `1.5`). `top_p 0.95` and
+  `top_k 20` come from the server. Set `"temperature"` / `"presence_penalty"` to `null` in the config to use the
+  server's values instead.
 
 ## Thinking budget
 
@@ -89,15 +91,16 @@ answer or sent back to it. Unchecked, that reasoning is long and repetitive. The
   Use `high` for hard bugs or design questions and `low` for simple edits. Change it with `/think`,
   `hc --think`, or `"thinking"` in the config.
 - **Loop detection.** If the reasoning starts repeating a passage, the harness stops that step and retries it once
-  with a small budget and a repetition penalty (`presence_penalty 1.0`). You'll see a "↻ retrying" note. Turn it
+  with a small budget and a repetition penalty (`presence_penalty 1.5`). You'll see a "↻ retrying" note. Turn it
   off with `"loop_detection": false`.
 - **The system prompt** asks the model to keep its reasoning short and not re-check settled points.
 
-There's no repetition penalty on normal steps, on purpose. Penalties like DRY and `presence_penalty` punish *any*
+There's no repetition penalty on normal steps, on purpose (the harness sends `presence_penalty 0`, overriding the
+server's default of 1.5). Penalties like DRY and `presence_penalty` punish *any*
 repeated text, and code edits have to repeat code exactly (an Edit's `old_string` and `new_string` are mostly
 identical), so they would corrupt edits.
 
-Measured on this server with the same small task (write `fib.py`, run it, check the output): 5m35s and 4,981 tokens
+Measured on the previous model (Qwen3-30B-A3B-Thinking) with the same small task (write `fib.py`, run it, check the output): 5m35s and 4,981 tokens
 before, 2m21s and 1,998 tokens with the default `medium` budget, with the same correct result.
 
 ## Long sessions: automatic summaries
@@ -134,7 +137,7 @@ output tokens" warnings, ask for smaller steps.
 `hc` opens a full-screen terminal app, similar to Claude Code or opencode:
 
 ```
- ✻ hc   ~/projects/api                                  qwen3-30b-a3b-thinking-abliterated
+ ✻ hc   ~/projects/api                                         qwen3.6-35b-a3b-abliterated
  ❯ fix the failing login test                                   │ Session
                                                                 │ fix the failing login test
  ✻ Thought for 48s · 812 tok  (ctrl-t to show)                  │
@@ -227,14 +230,15 @@ credentials file → environment (`HARNESS_BASE_URL`, `HARNESS_MODEL`, `HARNESS_
 | Key | Default | Notes |
 |---|---|---|
 | `base_url` | `https://arch.tailb96076.ts.net/v1` | any OpenAI-compatible `/v1` URL |
-| `model` | `qwen3-30b-a3b-thinking-abliterated` | the server only hosts this model |
-| `context_window` | `0` | `0` = ask the server at startup (falls back to 24,576); set a number to override |
+| `model` | `qwen3.6-35b-a3b-abliterated` | the server only hosts this model |
+| `context_window` | `0` | `0` = ask the server at startup (falls back to 65,536); set a number to override |
 | `thinking` | `medium` | thinking budget per step: `low`, `medium`, `high`, `max` |
 | `thinking_budget_message` | "Okay, I've thought enough. Time to act." | injected when the budget runs out |
 | `loop_detection` | `true` | stop and retry steps whose reasoning repeats itself |
-| `max_output_tokens` | `8192` | reasoning + answer; automatically capped to the space left in the window |
+| `max_output_tokens` | `16384` | reasoning + answer; automatically capped to the space left in the window |
 | `compact_threshold` | `0.70` | when to summarize |
-| `temperature` | `null` | `null` = server default |
+| `temperature` | `0.6` | `null` = server default (1.0) |
+| `presence_penalty` | `0` | `null` = server default (1.5); penalties corrupt code edits |
 | `show_reasoning` | `false` | show the chain of thought expanded (Ctrl-T toggles) |
 | `tui_mouse` | `true` | mouse-wheel scrolling in the app |
 | `request_timeout` | `1800` | seconds to wait for each read from the server; reading a long prompt can take ~10 minutes |

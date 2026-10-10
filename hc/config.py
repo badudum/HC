@@ -14,14 +14,17 @@ class Config:
     # Public endpoint of the llama.cpp server on `arch` (Tailscale Funnel). Requires an API key.
     base_url: str = "https://arch.tailb96076.ts.net/v1"
     api_key: str = ""
-    model: str = "qwen3-30b-a3b-thinking-abliterated"
+    model: str = "qwen3.6-35b-a3b-abliterated"
     # Per-request budget on the server: prompt + reasoning + answer must fit. 0 = ask the server (/props) at
     # startup; falls back to DEFAULT_CONTEXT if the server can't be reached.
     context_window: int = 0
     # Covers the model's reasoning AND its answer; thinking alone is often 300-3,000 tokens.
-    max_output_tokens: int = 8192
-    # None = use the server's sampling defaults (tuned for the thinking model: temp 0.6, top_p 0.95, top_k 20).
-    temperature: float = None
+    max_output_tokens: int = 16384
+    # Qwen3.6's recommended sampling for precise coding in thinking mode. The server's defaults (temp 1.0,
+    # presence_penalty 1.5) are tuned for general chat; a presence penalty also punishes the repetition code
+    # needs (identifiers, indentation). None = use the server's default for that setting.
+    temperature: float = 0.6
+    presence_penalty: float = 0.0
     # Summarize the conversation when the prompt reaches this fraction of the window, leaving room for the
     # summary itself (reasoning + summary text) and for the next answer.
     compact_threshold: float = 0.70
@@ -52,7 +55,7 @@ class Config:
         return d
 
 
-DEFAULT_CONTEXT = 24576
+DEFAULT_CONTEXT = 65536
 
 # Thinking budgets per effort level: the first step of a turn plans; later steps (after tool results) only need to
 # decide the next action, so they get less.

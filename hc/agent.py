@@ -201,7 +201,7 @@ class Agent:
             self.view.notice(f"↻ the model's reasoning started repeating itself; retrying this step with a "
                              f"{retry_budget}-token thinking budget", "warn")
             extra = self.thinking_extra(retry_budget)
-            extra["presence_penalty"] = 1.0
+            extra["presence_penalty"] = 1.5
             return self._call_model_once(extra, detect_loops=False)
 
     def _call_model_once(self, extra, detect_loops=True):

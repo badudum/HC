@@ -223,6 +223,8 @@ class Client:
         }
         if self.cfg.temperature is not None:
             body["temperature"] = self.cfg.temperature
+        if self.cfg.presence_penalty is not None:
+            body["presence_penalty"] = self.cfg.presence_penalty
         if tools:
             body["tools"] = tools
         body.update(extra or {})
